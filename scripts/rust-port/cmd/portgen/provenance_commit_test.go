@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -199,6 +200,30 @@ func TestSanitizedCheckEnvironmentRemovesActivationVariablesCaseInsensitively(t 
 	}
 }
 
+func TestSanitizedCheckEnvironmentPreservesProcessLimit(t *testing.T) {
+	if os.Getenv("PORTGEN_RESOURCE_PROBE") == "1" {
+		if got := os.Getenv("GOMAXPROCS"); got != "2" {
+			t.Fatalf("child GOMAXPROCS environment = %q, want 2", got)
+		}
+		if got := runtime.GOMAXPROCS(0); got != 2 {
+			t.Fatalf("child GOMAXPROCS = %d, want 2", got)
+		}
+		return
+	}
+	t.Setenv("PORTGEN_RESOURCE_PROBE", "1")
+	t.Setenv("GOMAXPROCS", "2")
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	//nolint:gosec // fixed self-test executable and exact test selection
+	command := exec.Command(executable, "-test.run=^TestSanitizedCheckEnvironmentPreservesProcessLimit$")
+	command.Env = sanitizedCheckEnvironment(os.Environ(), filepath.Join(t.TempDir(), "empty-gitconfig"))
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("sanitized child: %v\n%s", err, output)
+	}
+}
+
 func TestSanitizedCheckEnvironmentKeepsBothHomeNames(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
@@ -270,7 +295,12 @@ func TestRunFixtureChecksInjectsValidatedSidecarOracle(t *testing.T) {
 		return nil
 	}
 
-	if err := runFixtureChecks(t.TempDir(), expected); err != nil {
+	root := t.TempDir()
+	for _, pair := range renderFixtureMirrors {
+		writePortgenTestFile(t, root, pair.source, "{}\n")
+		writePortgenTestFile(t, root, pair.mirror, "{}\n")
+	}
+	if err := runFixtureChecks(root, expected); err != nil {
 		t.Fatalf("runFixtureChecks() error = %v", err)
 	}
 	joined := "\n" + strings.Join(captured, "\n")
