@@ -752,6 +752,27 @@ func benchmarkIndexDirectory(b *testing.B, parallel bool) {
 	}
 }
 
+// watchWaitTimeout bounds how long watcher tests wait for filesystem events
+// and the debounced re-index. It is generous so slow CI runners pass; the
+// poll returns as soon as the condition holds.
+const watchWaitTimeout = 10 * time.Second
+
+// waitForCondition polls cond every 25ms until it returns true or timeout
+// elapses. It reports whether cond became true; callers re-read the state and
+// keep their strict assertions.
+func waitForCondition(timeout time.Duration, cond func() bool) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if cond() {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
 func TestWatchDirectory_CreatesAndIndexes(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "seek-watch-create-test")
 	if err != nil {
@@ -790,25 +811,29 @@ func TestWatchDirectory_CreatesAndIndexes(t *testing.T) {
 		errCh <- WatchDirectory(ctx, dbClient, embedder, docsDir)
 	}()
 
-	time.Sleep(200 * time.Millisecond)
-
 	newFile := filepath.Join(docsDir, "new.md")
 	if err := os.WriteFile(newFile, []byte("watched content"), 0600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	time.Sleep(1500 * time.Millisecond)
-
-	doc, err := dbClient.GetDocument(newFile)
+	// Either the initial sync or the watcher indexes new.md, so polling for the
+	// row is enough and no fixed delay is needed before the write.
+	var doc *db.Document
+	indexed := waitForCondition(watchWaitTimeout, func() bool {
+		doc, err = dbClient.GetDocument(newFile)
+		return err == nil && doc != nil
+	})
 	if err != nil {
 		t.Fatalf("GetDocument: %v", err)
 	}
-	if doc == nil {
+	if !indexed {
 		t.Errorf("expected new.md to be indexed by watcher, got nil")
 	}
 
 	cancel()
-	<-errCh
+	if err := <-errCh; err != nil {
+		t.Errorf("WatchDirectory: %v", err)
+	}
 }
 
 func TestWatchDirectory_ModifiesFile(t *testing.T) {
@@ -854,19 +879,14 @@ func TestWatchDirectory_ModifiesFile(t *testing.T) {
 		errCh <- WatchDirectory(ctx, dbClient, embedder, docsDir)
 	}()
 
-	// Wait for the initial sync to finish. Poll instead of sleeping a fixed
-	// 200ms: on a loaded CI runner the initial index can take longer, which
-	// makes the fixed-sleep variant flaky.
+	// Wait for the initial sync to finish. The watcher is registered before the
+	// initial sync, so an indexed row means the watcher is live.
 	var doc *db.Document
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
+	indexed := waitForCondition(watchWaitTimeout, func() bool {
 		doc, err = dbClient.GetDocument(existingFile)
-		if err == nil && doc != nil {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	if err != nil || doc == nil {
+		return err == nil && doc != nil
+	})
+	if err != nil || !indexed {
 		t.Fatalf("initial index: doc=%v err=%v", doc, err)
 	}
 	originalHash := doc.Hash
@@ -875,21 +895,25 @@ func TestWatchDirectory_ModifiesFile(t *testing.T) {
 		t.Fatalf("update: %v", err)
 	}
 
-	time.Sleep(1500 * time.Millisecond)
-
-	docAfter, err := dbClient.GetDocument(existingFile)
+	var docAfter *db.Document
+	changed := waitForCondition(watchWaitTimeout, func() bool {
+		docAfter, err = dbClient.GetDocument(existingFile)
+		return err == nil && docAfter != nil && docAfter.Hash != originalHash
+	})
 	if err != nil {
 		t.Fatalf("GetDocument after modify: %v", err)
 	}
 	if docAfter == nil {
 		t.Fatal("expected existing.md to still be in DB after modify")
 	}
-	if docAfter.Hash == originalHash {
+	if !changed {
 		t.Errorf("expected hash to change after file modification, still %q", originalHash)
 	}
 
 	cancel()
-	<-errCh
+	if err := <-errCh; err != nil {
+		t.Errorf("WatchDirectory: %v", err)
+	}
 }
 
 func TestWatchDirectory_RemovesFile(t *testing.T) {
@@ -935,10 +959,14 @@ func TestWatchDirectory_RemovesFile(t *testing.T) {
 		errCh <- WatchDirectory(ctx, dbClient, embedder, docsDir)
 	}()
 
-	time.Sleep(200 * time.Millisecond)
-
-	doc, err := dbClient.GetDocument(doomedFile)
-	if err != nil || doc == nil {
+	// Wait for the initial sync to finish. The watcher is registered before the
+	// initial sync, so an indexed row means the watcher is live.
+	var doc *db.Document
+	indexed := waitForCondition(watchWaitTimeout, func() bool {
+		doc, err = dbClient.GetDocument(doomedFile)
+		return err == nil && doc != nil
+	})
+	if err != nil || !indexed {
 		t.Fatalf("initial index: doc=%v err=%v", doc, err)
 	}
 
@@ -946,18 +974,22 @@ func TestWatchDirectory_RemovesFile(t *testing.T) {
 		t.Fatalf("remove: %v", err)
 	}
 
-	time.Sleep(1500 * time.Millisecond)
-
-	docAfter, err := dbClient.GetDocument(doomedFile)
+	var docAfter *db.Document
+	removed := waitForCondition(watchWaitTimeout, func() bool {
+		docAfter, err = dbClient.GetDocument(doomedFile)
+		return err == nil && docAfter == nil
+	})
 	if err != nil {
 		t.Fatalf("GetDocument after remove: %v", err)
 	}
-	if docAfter != nil {
+	if !removed {
 		t.Errorf("expected doomed.md to be removed from index, still present")
 	}
 
 	cancel()
-	<-errCh
+	if err := <-errCh; err != nil {
+		t.Errorf("WatchDirectory: %v", err)
+	}
 }
 
 func TestIndexDirectory(t *testing.T) {
