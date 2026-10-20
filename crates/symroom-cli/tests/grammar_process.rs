@@ -39,7 +39,7 @@ fn grammar_process_matches_go_usage_help_and_flag_contract() {
         .expect("parse grammar process fixture");
     assert_eq!(fixture.schema_version, 1);
     assert!(!fixture.oracle_revision.is_empty());
-    assert_eq!(fixture.cases.len(), 125, "fixture case count changed");
+    assert_eq!(fixture.cases.len(), 122, "fixture case count changed");
 
     let mut mismatches = Vec::new();
     for case in &fixture.cases {

@@ -103,6 +103,8 @@ func truncateForDrift(s string) string {
 // new random identity; its success path is covered by the identity fixtures.
 // `run list` without a room is excluded because its missing-file errno text is
 // platform-specific and cannot share one fixture across the native matrix.
+// `index rebuild` is excluded because it prints the index path with the host
+// separator (`.symroom\index.sqlite` on Windows).
 func grammarProcessVectors(doc inventory.SymRoomGrammarDocument) [][]string {
 	vectors := [][]string{{}}
 	for _, sub := range doc.Subcommands {
@@ -117,6 +119,9 @@ func grammarProcessVectors(doc inventory.SymRoomGrammarDocument) [][]string {
 				continue
 			}
 			if sub.Name == "run" && action.Name == "list" {
+				continue
+			}
+			if sub.Name == "index" && action.Name == "rebuild" {
 				continue
 			}
 			vectors = append(vectors,
