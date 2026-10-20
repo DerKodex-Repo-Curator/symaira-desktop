@@ -112,7 +112,9 @@ fn every_recorded_service_rejection_replays_frozen_go_observations() {
     let recorded: Value =
         serde_json::from_str(include_str!("../../../testdata/port/dataset/sync.json"))
             .expect("recorded import-helper ledger");
-    let cases = recorded["error_cases"].as_array().expect("recorded rejections");
+    let cases = recorded["error_cases"]
+        .as_array()
+        .expect("recorded rejections");
     assert_eq!(cases.len(), 5);
 
     let source = sandbox.parent.join("source.csv");
