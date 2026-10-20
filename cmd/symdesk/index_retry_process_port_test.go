@@ -202,13 +202,55 @@ func readIndexRetryState(t *testing.T, root, retrievalPath, vault string) indexR
 	return indexRetrievalProcessState{Documents: []indexRetrievalProcessDocument{}, Chunks: []indexRetrievalProcessChunk{}, Lifecycle: lifecycle, Reasons: reasons}
 }
 
-// normalizeRetryText applies the process normalizer and records the missing
-// file wording as the Unix Go oracle reports it, so the frozen fixture is the
-// same on every platform. Go's Windows root lookup reports the same missing
-// file as the Windows error text under the lstat operation.
+// normalizeRetryText replaces the temporary root with $ROOT and rewrites the
+// separators of $ROOT path tokens to "/", so the frozen fixture is the same on
+// every platform. Only path tokens are touched: a whole-output separator
+// rewrite would also turn the JSON escapes in the failure text into slashes on
+// Windows. The missing-file wording is recorded as the Unix oracle reports it;
+// Go's Windows root lookup reports the same missing file under the lstat
+// operation with the Windows error text.
 func normalizeRetryText(value, root string) string {
-	value = normalizeProcessOutput(value, root)
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		value = strings.ReplaceAll(value, resolved, "$ROOT")
+	}
+	value = strings.ReplaceAll(value, root, "$ROOT")
+	value = strings.ReplaceAll(value, strings.ReplaceAll(root, `\`, `\\`), "$ROOT")
+	value = slashRootPaths(value)
 	return strings.ReplaceAll(value,
 		"lstat $ROOT/vault/gone.md: The system cannot find the file specified.",
 		"lstat $ROOT/vault/gone.md: no such file or directory")
+}
+
+// slashRootPaths rewrites the separators of every $ROOT path token to "/".
+// A doubled backslash inside a token is one separator.
+func slashRootPaths(text string) string {
+	var out strings.Builder
+	for {
+		index := strings.Index(text, "$ROOT")
+		if index < 0 {
+			out.WriteString(text)
+			return out.String()
+		}
+		out.WriteString(text[:index+len("$ROOT")])
+		text = text[index+len("$ROOT"):]
+		consumed := 0
+		for consumed < len(text) {
+			c := text[consumed]
+			switch {
+			case c == '\\' || c == '/':
+				out.WriteByte('/')
+				consumed++
+				if consumed < len(text) && text[consumed] == '\\' {
+					consumed++
+				}
+			case c == '.' || c == '_' || c == '-' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'):
+				out.WriteByte(c)
+				consumed++
+			default:
+				goto done
+			}
+		}
+	done:
+		text = text[consumed:]
+	}
 }
