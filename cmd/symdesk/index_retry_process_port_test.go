@@ -207,8 +207,7 @@ func readIndexRetryState(t *testing.T, root, retrievalPath, vault string) indexR
 // every platform. Only path tokens are touched: a whole-output separator
 // rewrite would also turn the JSON escapes in the failure text into slashes on
 // Windows. The missing-file wording is recorded as the Unix oracle reports it;
-// Go's Windows root lookup reports the same missing file under the lstat
-// operation with the Windows error text.
+// the Windows oracle reports the same missing file through GetFileAttributesEx.
 func normalizeRetryText(value, root string) string {
 	if resolved, err := filepath.EvalSymlinks(root); err == nil {
 		value = strings.ReplaceAll(value, resolved, "$ROOT")
@@ -217,7 +216,7 @@ func normalizeRetryText(value, root string) string {
 	value = strings.ReplaceAll(value, strings.ReplaceAll(root, `\`, `\\`), "$ROOT")
 	value = slashRootPaths(value)
 	return strings.ReplaceAll(value,
-		"lstat $ROOT/vault/gone.md: The system cannot find the file specified.",
+		"GetFileAttributesEx $ROOT/vault/gone.md: The system cannot find the file specified.",
 		"lstat $ROOT/vault/gone.md: no such file or directory")
 }
 

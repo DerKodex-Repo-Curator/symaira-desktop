@@ -378,9 +378,16 @@ fn run_retry(vault: Option<&str>, json_output: bool) -> ExitCode {
     for row in failed {
         let path = String::from_utf8_lossy(&row.path).into_owned();
         if let Err(error) = fs::symlink_metadata(&path) {
+            // Go's stat wraps a missing file in the GetFileAttributesEx
+            // operation on Windows and lstat elsewhere.
+            let operation = if cfg!(windows) {
+                "GetFileAttributesEx"
+            } else {
+                "lstat"
+            };
             let reason = format!(
                 "lstat vault file {path}: {}",
-                symdesk_vault::go_path_error("lstat", Path::new(&path), &error)
+                symdesk_vault::go_path_error(operation, Path::new(&path), &error)
             );
             record_index_status(&sidecar, &path, "failed", &reason);
             failures.push((path, reason));

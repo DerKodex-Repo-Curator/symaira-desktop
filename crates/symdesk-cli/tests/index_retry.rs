@@ -236,12 +236,12 @@ fn fixture() -> Fixture {
             .expect("valid fixture");
     if cfg!(windows) {
         // The frozen fixture records Unix stat wording. The native Windows Go
-        // oracle reports the same missing file as the Windows error text.
+        // oracle reports the same missing file through GetFileAttributesEx.
         for step in &mut fixture.steps {
             for reason in step.state.lifecycle_reasons.values_mut() {
                 *reason = reason.replace(
                     "lstat $ROOT/vault/gone.md: no such file or directory",
-                    "lstat $ROOT/vault/gone.md: The system cannot find the file specified.",
+                    "GetFileAttributesEx $ROOT/vault/gone.md: The system cannot find the file specified.",
                 );
             }
         }
