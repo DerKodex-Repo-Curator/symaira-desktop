@@ -681,38 +681,6 @@
       "stderr": ""
     },
     {
-      "name": "index rebuild",
-      "args": [
-        "index",
-        "rebuild"
-      ],
-      "exit_code": 0,
-      "stdout": "Rebuilt derived index at .symroom/index.sqlite\n",
-      "stderr": ""
-    },
-    {
-      "name": "index rebuild --help",
-      "args": [
-        "index",
-        "rebuild",
-        "--help"
-      ],
-      "exit_code": 0,
-      "stdout": "Rebuilt derived index at .symroom/index.sqlite\n",
-      "stderr": ""
-    },
-    {
-      "name": "index rebuild --bogus",
-      "args": [
-        "index",
-        "rebuild",
-        "--bogus"
-      ],
-      "exit_code": 0,
-      "stdout": "Rebuilt derived index at .symroom/index.sqlite\n",
-      "stderr": ""
-    },
-    {
       "name": "run",
       "args": [
         "run"
