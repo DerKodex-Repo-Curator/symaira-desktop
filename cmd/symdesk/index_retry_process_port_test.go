@@ -152,14 +152,14 @@ func observeIndexRetryProcess(t *testing.T) indexRetryProcessFixture {
 			}
 			result.ExitCode = exit.ExitCode()
 		}
-		result.Stdout = normalizeProcessOutput(stdout.String(), root)
-		result.Stderr = normalizeProcessOutput(stderr.String(), root)
+		result.Stdout = normalizeRetryText(stdout.String(), root)
+		result.Stderr = normalizeRetryText(stderr.String(), root)
 		mu.Lock()
 		observed := append([]indexRetrievalProcessRequest{}, requests[before:]...)
 		mu.Unlock()
 		recorded := make([]string, 0, len(args))
 		for _, arg := range args {
-			recorded = append(recorded, normalizeProcessOutput(arg, root))
+			recorded = append(recorded, normalizeRetryText(arg, root))
 		}
 		fixture.Steps = append(fixture.Steps, indexRetryProcessStep{
 			ID: id, Writes: writes, Removes: removes, Args: recorded, Result: result, Requests: observed,
@@ -184,11 +184,25 @@ func observeIndexRetryProcess(t *testing.T) indexRetryProcessFixture {
 func readIndexRetryState(t *testing.T, root, retrievalPath, vault string) indexRetrievalProcessState {
 	t.Helper()
 	if _, err := os.Stat(retrievalPath); err == nil {
-		return readIndexRetrievalState(t, root, retrievalPath, vault)
+		state := readIndexRetrievalState(t, root, retrievalPath, vault)
+		for name, reason := range state.Reasons {
+			state.Reasons[name] = normalizeRetryText(reason, root)
+		}
+		return state
 	}
 	lifecycle, reasons := readIndexBuildLifecycle(t, vault)
 	for name, reason := range reasons {
-		reasons[name] = normalizeProcessOutput(reason, root)
+		reasons[name] = normalizeRetryText(reason, root)
 	}
 	return indexRetrievalProcessState{Documents: []indexRetrievalProcessDocument{}, Chunks: []indexRetrievalProcessChunk{}, Lifecycle: lifecycle, Reasons: reasons}
+}
+
+// normalizeRetryText applies the process normalizer and records the missing
+// file wording as the Unix Go oracle reports it, so the frozen fixture is the
+// same on every platform. The native Windows oracle reports the Windows form.
+func normalizeRetryText(value, root string) string {
+	value = normalizeProcessOutput(value, root)
+	return strings.ReplaceAll(value,
+		"GetFileAttributesEx $ROOT/vault/gone.md: The system cannot find the file specified.",
+		"lstat $ROOT/vault/gone.md: no such file or directory")
 }
