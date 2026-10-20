@@ -199,10 +199,11 @@ func readIndexRetryState(t *testing.T, root, retrievalPath, vault string) indexR
 
 // normalizeRetryText applies the process normalizer and records the missing
 // file wording as the Unix Go oracle reports it, so the frozen fixture is the
-// same on every platform. The native Windows oracle reports the Windows form.
+// same on every platform. Go's Windows root lookup reports the same missing
+// file as the Windows error text under the lstat operation.
 func normalizeRetryText(value, root string) string {
 	value = normalizeProcessOutput(value, root)
 	return strings.ReplaceAll(value,
-		"GetFileAttributesEx $ROOT/vault/gone.md: The system cannot find the file specified.",
+		"lstat $ROOT/vault/gone.md: The system cannot find the file specified.",
 		"lstat $ROOT/vault/gone.md: no such file or directory")
 }
