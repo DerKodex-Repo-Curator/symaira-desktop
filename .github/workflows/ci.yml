@@ -600,6 +600,10 @@ jobs:
         shell: bash
         run: make render-ir-differential
 
+      - name: Run native render Markdown export differential
+        shell: bash
+        run: make render-export-differential
+
       - name: Run native dataset aggregate differential
         shell: bash
         run: make dataset-aggregate-differential
@@ -627,6 +631,10 @@ jobs:
       - name: Run native index build CLI differential
         shell: bash
         run: make index-build-cli-differential
+
+      - name: Run native index retrieval CLI differential
+        shell: bash
+        run: make index-retrieval-cli-differential
 
       - name: Run native index status CLI differential
         shell: bash
