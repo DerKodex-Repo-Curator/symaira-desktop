@@ -125,9 +125,14 @@ func runGrammarProcessCase(t *testing.T, oracle string, args []string) grammarPr
 	}
 	cmd := exec.Command(oracle, args...) //nolint:gosec // test-only command uses a fixed helper and controlled arguments
 	cmd.Dir = work
+	// Windows resolves the home directory from USERPROFILE, so both home
+	// variables point at the disposable root on every platform.
 	cmd.Env = []string{
-		"HOME=" + home, "XDG_DATA_HOME=" + dataHome, "XDG_CONFIG_HOME=" + configHome,
+		"HOME=" + home, "USERPROFILE=" + home, "XDG_DATA_HOME=" + dataHome, "XDG_CONFIG_HOME=" + configHome,
 		"TMPDIR=" + tmp, "PATH=" + tmp, "TZ=UTC", "LC_ALL=C", "LANG=C",
+	}
+	if systemRoot := os.Getenv("SYSTEMROOT"); systemRoot != "" {
+		cmd.Env = append(cmd.Env, "SYSTEMROOT="+systemRoot)
 	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
