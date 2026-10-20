@@ -71,7 +71,12 @@ func TestIndexRetryProcessPortFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(current, encoded) {
-		t.Fatal("index retry fixture is stale; regenerate explicitly with PORT_GENERATE=1 go test ./cmd/symdesk -run '^TestIndexRetryProcessPortFixture$'")
+		offset := 0
+		for offset < len(current) && offset < len(encoded) && current[offset] == encoded[offset] {
+			offset++
+		}
+		from := max(offset-160, 0)
+		t.Fatalf("index retry fixture is stale; regenerate explicitly with PORT_GENERATE=1 go test ./cmd/symdesk -run '^TestIndexRetryProcessPortFixture$'\nfirst difference at byte %d\ncommitted: %q\nobserved:  %q", offset, string(current[from:min(offset+160, len(current))]), string(encoded[from:min(offset+160, len(encoded))]))
 	}
 }
 
