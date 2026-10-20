@@ -64,8 +64,38 @@ func TestPortGrammarProcessContract(t *testing.T) {
 		t.Fatalf("read %s: %v (set PORT_GENERATE=1 to create it)", grammarProcessContractPath, err)
 	}
 	if !bytes.Equal(got, data) {
+		reportGrammarProcessDrift(t, got, fixture)
 		t.Fatalf("Go grammar process fixture is stale; regenerate deliberately with PORT_GENERATE=1")
 	}
+}
+
+// reportGrammarProcessDrift names each case whose live Go result differs from
+// the committed fixture, so a platform-only difference is diagnosable from CI.
+func reportGrammarProcessDrift(t *testing.T, committed []byte, live grammarProcessContract) {
+	t.Helper()
+	var want grammarProcessContract
+	if err := json.Unmarshal(committed, &want); err != nil {
+		t.Logf("committed fixture does not parse: %v", err)
+		return
+	}
+	if len(want.Cases) != len(live.Cases) {
+		t.Logf("case count differs: committed %d, live %d", len(want.Cases), len(live.Cases))
+	}
+	for i := range min(len(want.Cases), len(live.Cases)) {
+		w, l := want.Cases[i], live.Cases[i]
+		if w.Name != l.Name || w.ExitCode != l.ExitCode || w.Stdout != l.Stdout || w.Stderr != l.Stderr {
+			t.Logf("case %q drifts: committed exit=%d stdout=%q stderr=%q; live exit=%d stdout=%q stderr=%q",
+				l.Name, w.ExitCode, truncateForDrift(w.Stdout), truncateForDrift(w.Stderr),
+				l.ExitCode, truncateForDrift(l.Stdout), truncateForDrift(l.Stderr))
+		}
+	}
+}
+
+func truncateForDrift(s string) string {
+	if len(s) > 240 {
+		return s[:240] + "..."
+	}
+	return s
 }
 
 // grammarProcessVectors enumerates usage, help and unknown-flag argv for every
