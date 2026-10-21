@@ -631,7 +631,7 @@ retrieval-turboquant-differential:
 	GOTOOLCHAIN=go1.26.10 go run ./scripts/rust-port/cmd/turboquant-gen --check
 	$(CARGO) test -p symdesk-index --locked --test turboquant_codec
 	$(CARGO) test -p symdesk-index --locked --test turboquant_property
-	GOTOOLCHAIN=go1.26.9 go test -count=1 -run '^TestGoReadsRustSidecars$$' ./scripts/rust-port/cmd/turboquant-gen
+	GOTOOLCHAIN=go1.26.10 go test -count=1 -run '^TestGoReadsRustSidecars$$' ./scripts/rust-port/cmd/turboquant-gen
 
 # Go vs Rust p95/throughput; a Rust regression above 10% exits nonzero.
 TURBOQUANT_BENCH_REPORT ?= docs/rust-port/turboquant-benchmark.md
